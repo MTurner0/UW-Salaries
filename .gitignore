@@ -1,0 +1,8 @@
+.vscode/
+.ipynb_checkpoints/
+__pycache__/
+*.project.json
+data/
+data/*.csv
+data/cache/*.csv
+R/Forbidden
