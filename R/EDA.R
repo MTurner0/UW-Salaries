@@ -13,7 +13,7 @@ data <- read_csv("../../data/forbidden.csv") %>%
 data %>% 
   filter(!str_starts(`Dept Description`, "Ath/")) %>% 
   ggplot() +
-  geom_jitter(aes(x = factor(`Fiscal year`), y = `Total Pay`), shape = "x", width = 0.2) +
-  labs(x = "Fiscal Year", y = "Total Pay (USD)") +
+  geom_jitter(aes(x = factor(`Fiscal year`), y = `Total Pay`/1000), shape = "x", width = 0.2) +
+  labs(x = "Fiscal Year", y = "Total Pay (USD, in thousands)") +
   theme_bw()
   
