@@ -1,6 +1,6 @@
 library(tidyverse)
 
-data <- read_csv("../data/forbidden.csv") %>%
+data <- read_csv("../data/forbidden-all.csv") %>%
   mutate(
     `Total Pay` = `Total Pay` %>%
       gsub(x = ., pattern = "[$]", replacement = "") %>%
@@ -45,7 +45,8 @@ data %>%
     mean = mean(`Total Pay`),
     `3rd Q.` = quantile(`Total Pay`, 0.75),
     max = max(`Total Pay`)
-    )
+    ) %>%
+  arrange(desc(median))
 
 # Exploring how to break up the Department Description column
 data %>%
