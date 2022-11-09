@@ -1,6 +1,6 @@
-library(data.table)
-library(ggplot2)
-library(stringr)
+require(data.table)
+require(ggplot2)
+require(stringr)
 
 setDTthreads(threads = 0)
 
