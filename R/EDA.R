@@ -28,9 +28,12 @@ data %>%
     ) +
   theme_bw()
 
+
+
 # Compares summary statistics for professors in the econ and stats departments
 data %>%
   filter(
+    Campus == "UW Madison" &
     (
       str_detect(`Dept Description`, "Economics") |
       str_detect(`Dept Description`, "Statistics")
