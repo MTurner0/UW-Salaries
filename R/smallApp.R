@@ -44,24 +44,28 @@ edges <- tibble(
   drop_na()
 
 nodes <- tibble(
-  names = unique(c(edges$source, edges$target)),
-  id = 1:length(names)
+  name = unique(c(edges$source, edges$target)),
+  id = 1:length(name)
 )
+
+#nodes <- letsci %>%
+#  select(-`Dept Description`) %>%
+#  pivot_longer(School:Department,
+#               names_to = "type",
+#               values_to = "name") %>%
+#  drop_na() %>%
+#  distinct() %>%
+#  mutate(id = 1:n())
 
 library(tidygraph)
 library(ggraph)
+
 
 G <- tbl_graph(
   nodes = nodes,
   edges = edges,
   directed = TRUE
 )
-
-ggraph_maker <- function() {
-  ggraph(G) +
-    geom_edge_link(width = 0.2) +
-    geom_node_label(aes(label = names))
-}
 
 ui <- fluidPage(
   tabsetPanel(
@@ -105,12 +109,11 @@ ui <- fluidPage(
         sidebarPanel(
           titlePanel("Lorem ipsum dolor sit"),
           #shinythemes::themeSelector(),
-          fluidRow(column(6) #close column
+          fluidRow(column(1) #close column
           ) #close fluid row
         ), #close sidebar panel
         mainPanel(
-          withSpinner(plotOutput(outputId = "LSgraph", brush = "brushy")
-          )
+          fluidRow(plotOutput(outputId = "LSgraph", brush = brushOpts(id = "brushy")), width = 9)
         ) #close main panel
       )#close sidebar layout 
     )
@@ -170,8 +173,32 @@ server <- function(input, output, session) {
     relevant_info_finder()
   },rownames = TRUE)
 
-  output$LSgraph <- renderPlot(ggraph_maker())
+  set.seed(2022)
+  p <-   ggraph(G, layout = "tree", circular = TRUE) +
+    geom_edge_link(width = 0.2) +
+    geom_node_label(aes(label = name), repel = TRUE)
   
+  plot_df <- ggplot_build(p)
+  
+  coords <- plot_df$data[[2]]
+  
+  output$LSgraph <- renderPlot(p)
+  
+  coords_filt <- reactive({
+    if (is.null(input$brushy$xmin)){
+      coords
+    } else {
+      filter(coords, x >= input$brushy$xmin, 
+             x <= input$brushy$xmax, 
+             y >= input$brushy$ymin, 
+             y <= input$brushy$ymax)
+    }})
+
+    observe(print(
+      coords_filt()
+    )
+    )
+
 }
 
 
