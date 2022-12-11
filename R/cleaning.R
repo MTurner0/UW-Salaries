@@ -1,47 +1,53 @@
 require(tidyverse)
 
-data <- read_csv("../data/forbidden-all.csv") %>%
-  mutate(
-    `Total Pay` = `Total Pay` %>%
-      gsub(x = ., pattern = "[$]", replacement = "") %>%
-      gsub(x = ., pattern = ",", replacement = "") %>%
-      as.numeric(),
-    `Start Date` = `Start Date` %>%
-      lubridate::mdy()
+edge_builder <- function(letsci, nodes) {
+  edge_builder1 <- nodes %>%
+    filter(type == "School") %>%
+    right_join(letsci, by = c("name" = "School")) %>%
+    rename(School = name, School_ID = id) %>%
+    select(-type)
+  
+  edge_builder2 <- nodes %>%
+    filter(type == "Subschool") %>%
+    right_join(edge_builder1, by = c("name" = "Subschool")) %>%
+    rename(Subschool = name, Subschool_ID = id) %>%
+    select(-type)
+  
+  edge_builder3 <- nodes %>%
+    filter(type == "Department") %>%
+    right_join(edge_builder2, by = c("name" = "Department")) %>%
+    rename(Department = name, Department_ID = id) %>%
+    select(-type)
+  
+  tibble(
+    source = c(edge_builder3$School_ID, edge_builder3$Subschool_ID),
+    target = c(edge_builder3$Subschool_ID, edge_builder3$Department_ID)
   ) %>%
-  select(-Details)
+    drop_na()
+}
 
-letsci <- data %>%
-  filter(Campus == "UW Madison" &
-         str_detect(`Dept Description`, "L&S")) %>%
-  select(`Dept Description`) %>%
-  distinct() %>%
-  mutate(
-    School = str_split_i(`Dept Description`, "/", 1),
-    Subschool = str_split_i(`Dept Description`, "/", 2),
-    Department = str_split_i(`Dept Description`, "/", 3),
-  )
+ls_lookup <- function(labels, types) {
+  df <- tibble()
+  for (i in seq_along(labels)) {
+    df <- rbind(
+      df,
+      ls_lookup_helper(labels[i], types[i])
+    )
+  }
+  distinct(df)
+}
 
-edges <- tibble(
-  source = c(letsci$School, letsci$Subschool),
-  target = c(letsci$Subschool, letsci$Department)
-) %>%
-  drop_na()
+ls_lookup_helper <- function(label, type) {
+  # For one label and type
+  column <- levels(nodes$type)[type]
+  descriptions <- letsci %>%
+    filter(letsci[column] == label) %>%
+    pull(`Dept Description`)
+  data %>%
+    filter(`Dept Description` %in% descriptions)
+}
 
-nodes <- tibble(
-  names = unique(c(edges$source, edges$target)),
-  id = 1:length(names)
-)
 
-library(tidygraph)
-library(ggraph)
 
-G <- tbl_graph(
-  nodes = nodes,
-  edges = edges,
-  directed = TRUE
-)
+letsci["Department"]
 
-ggraph(G) +
-  geom_edge_link(width = 0.2) +
-  geom_node_label(aes(label = names))

@@ -1,11 +1,13 @@
 library(dplyr)
 library(ggplot2)
 library(shiny)
+library(stringr)
 library(DT)
 library(ggrepel)
 library(tidyr)
 library(shinycssloaders)
 library(shinythemes)
+source("cleaning.R")
 
 #Import Data
 data <- readr::read_csv("../data/forbidden-all.csv") %>%
@@ -37,29 +39,22 @@ letsci <- data %>%
     Department = str_split_i(`Dept Description`, "/", 3),
   )
 
-edges <- tibble(
-  source = c(letsci$School, letsci$Subschool),
-  target = c(letsci$Subschool, letsci$Department)
-) %>%
-  drop_na()
+nodes <- letsci %>%
+  select(-`Dept Description`) %>%
+  pivot_longer(School:Department,
+               names_to = "type",
+               values_to = "name") %>%
+  drop_na() %>%
+  distinct() %>%
+  mutate(
+    id = 1:n(),
+    type = factor(type, levels = c("School", "Subschool", "Department"))
+    )
 
-nodes <- tibble(
-  name = unique(c(edges$source, edges$target)),
-  id = 1:length(name)
-)
-
-#nodes <- letsci %>%
-#  select(-`Dept Description`) %>%
-#  pivot_longer(School:Department,
-#               names_to = "type",
-#               values_to = "name") %>%
-#  drop_na() %>%
-#  distinct() %>%
-#  mutate(id = 1:n())
+edges <- edge_builder(letsci, nodes)
 
 library(tidygraph)
 library(ggraph)
-
 
 G <- tbl_graph(
   nodes = nodes,
@@ -104,16 +99,21 @@ ui <- fluidPage(
       )#close sidebar layout 
     ),
     tabPanel(
-      "L&S", fluid = TRUE,
+      "UW Madison -- L&S", fluid = TRUE,
       sidebarLayout(
         sidebarPanel(
-          titlePanel("Lorem ipsum dolor sit"),
+          titlePanel("Selected departments:"),
           #shinythemes::themeSelector(),
-          fluidRow(column(1) #close column
+          fluidRow(tableOutput(outputId = "print_me") #close column
           ) #close fluid row
         ), #close sidebar panel
         mainPanel(
-          fluidRow(plotOutput(outputId = "LSgraph", brush = brushOpts(id = "brushy")), width = 9)
+          h2("Department structure"),
+          p("The main UW Madison campus has an entire network of colleges, subschools, and departments."),
+          p("Here, you can explore the different subschools and departments within the College of Letters & Sciences."),
+          p("Brush the network graph to see salaries for the selected L&S divisions."),
+          fluidRow(plotOutput(outputId = "LSgraph", brush = brushOpts(id = "brushy"), height = 800), width = 9),
+          withSpinner(plotOutput(outputId = "LSscatter"))
         ) #close main panel
       )#close sidebar layout 
     )
@@ -176,7 +176,10 @@ server <- function(input, output, session) {
   set.seed(2022)
   p <-   ggraph(G, layout = "tree", circular = TRUE) +
     geom_edge_link(width = 0.2) +
-    geom_node_label(aes(label = name), repel = TRUE)
+    geom_node_label(aes(label = name, fill = type),
+                    label.padding = unit(0.1, "lines")) +
+    scale_fill_brewer(palette = "Set2") +
+    theme(legend.position = "none")
   
   plot_df <- ggplot_build(p)
   
@@ -194,10 +197,33 @@ server <- function(input, output, session) {
              y <= input$brushy$ymax)
     }})
 
-    observe(print(
-      coords_filt()
-    )
-    )
+    output$print_me <- renderTable({
+      brushed <- coords_filt()
+
+      brushed %>%
+        transmute(
+          Type = levels(nodes$type)[group],
+          Name = label
+        )
+    })
+    
+    output$LSscatter <- renderPlot({
+      brushed <- coords_filt()
+      
+      ls_lookup(brushed$label, brushed$group) %>%
+        ggplot() +
+        geom_jitter(
+          aes(x = factor(`Fiscal year`),
+              y = `Total Pay`/1000),
+          shape = "x",
+          width = 0.2
+        ) +
+        labs(
+          x = "Fiscal Year",
+          y = "Total Pay (USD, in thousands)"
+        ) +
+        theme_bw()
+    })
 
 }
 
