@@ -24,6 +24,7 @@ data <- readr::read_csv("../data/forbidden-all.csv") %>%
       lubridate::mdy()
   ) %>%
   select(-Details)
+
 fiftystatesCAN <- read.csv("../data/fiftystatesCAN.csv")
 uniData <- read.csv('../data/uniData.csv')
 
@@ -89,6 +90,13 @@ plot2 <- plot2 +geom_text_repel(data = subset(temp2, `Mean Salary` >= 55000),aes
 plot2 <- plot2 + ggtitle(paste(paste("Increasing Percent Admitted by 1 Percent Causes a Decrease in Graduation Rate by", slope), "Percent.")) +
   xlab("Percentage of Undergraduate Students Admitted to the University in 2021") + ylab("Undergraduate Graduation Rate in 2021")
 
+campus <- unique(data$Campus)
+data <- data %>%
+  mutate(
+    School = str_split_i(`Dept Description`, "/", 1),
+    Subschool = str_split_i(`Dept Description`, "/", 2),
+    Department = str_split_i(`Dept Description`, "/", 3),
+  )
 #End preprocess data tab1
 
 #Begin Graph Data Preprocess
@@ -124,6 +132,23 @@ G <- tbl_graph(
   nodes = nodes,
   edges = edges,
   directed = TRUE
+)
+
+#defining theme for tabs 3 and 4
+my_theme<-theme(
+  plot.background = element_rect(fill = "black", colour = NA),
+  panel.background = element_rect(fill = "black", colour = NA),
+  axis.text = element_text(colour = "linen"),
+  axis.title = element_text(colour = "linen"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "grey50"),
+  legend.background = element_rect(fill = "black", size = 4, colour = "black"),
+  legend.justification = c(0, 1),
+  legend.text = element_text(colour = "white"),
+  legend.key= element_rect(fill = "black"),
+  strip.background = element_rect(fill = "black", color = "grey50", size = 1),
+  strip.text = element_text(colour = "white")
 )
 
 ui <- fluidPage(
@@ -177,7 +202,34 @@ ui <- fluidPage(
           withSpinner(plotOutput(outputId = "LSscatter"))
         ) #close main panel
       )#close sidebar layout 
-    ) #Close tab 2 
+    ), #Close tab 2 
+    tabPanel("Department wise Analysis", fluid = TRUE, 
+              sidebarLayout(
+                sidebarPanel(
+                  selectInput("campus", "Select the Campus:", campus,selected = "UW Madison"),
+                  uiOutput("school"),
+                  #selectInput("school", "Select the School:", choices = as.character(data[data$Campus==input$campus,"School"]), multiple = TRUE,selected = "L&S"),
+                  uiOutput("dept"),
+                ), #close sidebar panel 
+                  mainPanel(
+                     h3("Yearly Distrbuition of Total Pay by Department"), plotOutput("tp"),
+                     h3("Yearly Median Salary by Department"), plotOutput("md")
+                  ) #close main panel
+                ) #close sidebar layout
+             ), #close tab 3 
+    tabPanel("Job Title wise Analysis", fluid = TRUE, 
+              sidebarLayout(
+                sidebarPanel(
+                  selectInput("campus", "Select the Campus:", campus,selected = "UW Madison"),
+                  uiOutput("school2"),
+                  uiOutput("title")
+                ), #close sidebar panel
+               mainPanel(
+                 h3("Yearly Distrbuition of Total Pay by Job Title"), plotOutput("tpd"),
+                 h3("Yearly Median Salary by Department Job Title"), plotOutput("mdd")
+               ) #close main panel
+              ) #close sidebar layout
+            ) #close tab 4
   )#close navbar page
 )#close UI
 
@@ -361,7 +413,49 @@ server <- function(input, output, session) {
           y = "Total Pay (USD, in thousands)"
         )
     })
+  output$school <- renderUI({
+  selectInput("school", "Select the School:", choices = data[data$Campus==input$campus,"School"], multiple = TRUE,selected = "L&S")
+  })
+  output$school2 <- renderUI({
+    selectInput("school2", "Select the School:", choices = data[data$Campus==input$campus,"School"], multiple = TRUE,selected = "L&S")
+  })
+  output$dept <- renderUI({
+    selectInput("dept", "Select the Department:", unique(data[which(data[,"School"]==input$school),"Subschool"]), multiple = TRUE,selected = c("Economics","Statistics"))
+  })
+  output$title <- renderUI({
+    selectInput("title", "Select the Job Title:", unique(data[which(data[,"School"]==input$school2),"Title"]), multiple = TRUE,selected = c("Professor","Lecturer"))
+  })
+  current_data <- reactive({data %>% filter(`Campus` %in% input$campus) %>% 
+      filter(`School`  %in% input$school) %>%
+      filter(`Subschool` %in%  input$dept)
+  })
+  
+  current_data2 <- reactive({data %>% filter(`Campus` %in% input$campus) %>% 
+      filter(`School`  %in% input$school2) %>%
+      filter(`Title` %in%  input$title)
+  })
 
+  output$tp <- renderPlot({
+    ggplot(current_data()) + geom_freqpoly(aes(`Total Pay`/1000,color=`Subschool`)) +facet_grid(~`Fiscal year`,scales = "free") + scale_colour_brewer(type = "seq", palette = "Set1") + my_theme
+  })
+  output$md <- renderPlot({
+    current_data() %>%
+    group_by(`Fiscal year`,`Campus`,`School`,`Subschool`)%>% 
+    summarise(Median=median(`Total Pay`)/1000) %>%
+    arrange(`Campus`,`Subschool`,`Fiscal year`) %>%
+    ggplot() + geom_line(aes(`Fiscal year`,Median,color="lightblue3"),show.legend = FALSE) + facet_wrap(~`Subschool`,scales = "free") +  geom_point(aes(`Fiscal year`,Median,color="blue"),show.legend = FALSE) +theme(axis.text.x = element_text(angle = 90,size = 6),axis.text.y = element_text(size = 6)) +scale_x_continuous(limits = c(2017,2021)) + my_theme
+  })
+  
+  output$tpd <- renderPlot({
+    ggplot(current_data2()) + geom_freqpoly(aes(`Total Pay`/1000,color=`Title`)) +facet_grid(~`Fiscal year`,scales = "free") + scale_colour_brewer(type = "seq", palette = "Set1") + my_theme
+  })
+  output$mdd <- renderPlot({
+    current_data2() %>%
+      group_by(`Fiscal year`,`Campus`,`School`,`Title`)%>% 
+      summarise(Median=median(`Total Pay`)/1000) %>%
+      arrange(`Campus`,`Title`,`Fiscal year`) %>%
+      ggplot() + geom_line(aes(`Fiscal year`,Median,color="lightblue3"),show.legend = FALSE) + facet_wrap(~`Title`,scales = "free") +  geom_point(aes(`Fiscal year`,Median,color="blue"),show.legend = FALSE) +theme(axis.text.x = element_text(angle = 90,size = 6),axis.text.y = element_text(size = 6)) +scale_x_continuous(limits = c(2017,2021)) + my_theme
+  })
 }
 
 
