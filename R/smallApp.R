@@ -1,13 +1,16 @@
-library(dplyr)
-library(ggplot2)
+library(tidyverse)
 library(shiny)
-library(stringr)
 library(DT)
 library(ggrepel)
 library(tidyr)
 library(shinycssloaders)
 library(shinythemes)
+library(stringr)
+library(shinyWidgets)
+library(shinydashboard)
+library(reshape2)
 source("cleaning.R")
+
 
 #Import Data
 data <- readr::read_csv("../data/forbidden-all.csv") %>%
@@ -23,11 +26,71 @@ data <- readr::read_csv("../data/forbidden-all.csv") %>%
 fiftystatesCAN <- read.csv("../data/fiftystatesCAN.csv")
 uniData <- read.csv('../data/uniData.csv')
 
+#Preprocess Data tab1
 relevant_info <- uniData %>% 
   select(-c(X,X.1,clean_Name, HousingDeposit))
 colnames(relevant_info) <- c("Campus", "Resident-Tuition", "Non-Resident-Tuition", "Minnesota-Reciprocity", "Enrollment-Deposit", "Admitted-Freshman-GPA-IQR","Percent-Admitted", 
                              "Total-Enrollment", "Average-Class-Size","Graduation-Rate","NCAA-Division","Percent-Receive-Financial-Aid","Latitudes","Longitudes")
+data_noAthletics <- data %>%
+  filter(!str_detect(`Dept Description`, "Ath"))
 
+
+relevant_info %>% 
+  select(c("Campus", "Resident-Tuition", "Non-Resident-Tuition","Percent-Admitted", 
+         "Total-Enrollment", "Average-Class-Size","Graduation-Rate"))
+
+#create average salary for 2021
+temp <- data_noAthletics %>% 
+  filter(`Fiscal year`==2021) %>% 
+  select(c("Campus", "Total Pay")) %>% 
+  group_by(Campus) %>% 
+  summarise(`Mean Salary`=mean(`Total Pay`))
+
+#join averages with tabular data
+relevant_info <- relevant_info %>% 
+  left_join(temp, by = c("Campus" = "Campus"))
+
+#Format data for plot1
+temp <- relevant_info %>% 
+  select(c("Campus","Resident-Tuition", "Non-Resident-Tuition",'Mean Salary')) %>% 
+  melt(id=c("Campus",'Mean Salary')) %>% 
+  rename(Tuition=value, `Tuition Type` = variable)
+
+
+plot1 <- temp %>%  
+  ggplot(aes(x=Tuition,y=`Mean Salary`)) + 
+  geom_point() +  
+  facet_wrap(vars(`Tuition Type`))
+
+plot1 <- plot1 +geom_text_repel(data = subset(temp, `Mean Salary` >= 55000),aes(label = Campus, size = NULL), 
+                       nudge_y = 0.7, nudge_x = 3)
+
+#Format data plot2
+temp2 <- relevant_info %>% 
+  select(c("Campus","Percent-Admitted", "Graduation-Rate", 'Mean Salary'))
+
+#get intercept and slope value for plot2
+reg<-lm(formula = `Graduation-Rate` ~ `Percent-Admitted`,
+        data=temp2)                      
+
+coeff<-coefficients(reg)          
+intercept<-coeff[1]
+slope<- coeff[2]
+slope <- substr(paste0(slope, ""), 1,5)
+
+plot2 <- temp2 %>%  
+ggplot(aes(x=`Percent-Admitted`,y=`Graduation-Rate`, color=`Mean Salary`)) + 
+geom_point() + 
+  geom_smooth(method = "lm", se=FALSE)
+
+plot2 <- plot2 +geom_text_repel(data = subset(temp2, `Mean Salary` >= 55000),aes(label = Campus, size = NULL), 
+                       nudge_y = 1, nudge_x = -1) + scale_color_gradient(low = "green", high = "black")
+plot2 <- plot2 + ggtitle(paste(paste("Increasing Percent Admitted by 1 Percent Causes a Decrease in Graduation Rate by", slope), "Percent.")) +
+  xlab("Percentage of Undergraduate Students Admitted to the University in 2021") + ylab("Undergraduate Graduation Rate in 2021")
+
+#End preprocess data tab1
+
+#Begin Graph Data Preprocess
 letsci <- data %>%
   filter(Campus == "UW Madison" &
            str_detect(`Dept Description`, "L&S")) %>%
@@ -63,41 +126,38 @@ G <- tbl_graph(
 )
 
 ui <- fluidPage(
-  tabsetPanel(
-    tabPanel(
-      "Map", fluid = TRUE,
+  useShinydashboard(),
+  titlePanel("UW-System Salary Analysis"),
+  navbarPage("Navigation",
+    tabPanel("UW-System Overview", fluid = TRUE,
       sidebarLayout(
         sidebarPanel(
-          titlePanel("Desired Program Characteristics"),
-          #shinythemes::themeSelector(),
-          fluidRow(column(6,
-                          sliderInput(inputId = "OutStateTuitionRange",
-                                      label = "Select Out of State Tuition",
-                                      min = 10000,
-                                      max = 40000,
-                                      value = c(10000,40000),
-                                      width = "220px"),
-                          helpText("For example: Show universities with out of state tuition between $10,000 and $40,000 per academic year"),
-          ) #close column
-          ) #close fluid row
+          titlePanel("Click a University on the Map for Details or Click Show All"),br(), 
+          strong("Reset at any point with the clear button. The table is meant to provide users with relevant background information to contextualize further analysis."), 
+          br(),
+          strong("Plot One:"),br(),
+          p("The first scatterplot shows how graduation rate changes with respect to admitted percentage and mean salary. We find a decreasing trend with slope of -1.18, which at a glance suggests graduation rate drops 1.18 percent for an extra 1 percent of admitted students. We also see that mean salary drops as admitted percentage grows with UW Whitewater being an exception. "), 
+          br(), 
+          strong("Plot Two:"), br(),
+          p("The second scatterplots show how mean salary increases with respect to cost of tuition. Since all universities have drastically different tuitions depending on where the incoming student is from, the scatterplot has been faceted on in-state tuition versus out-of-state tuition. There appears to be much more spread in the out-of-state tuitions with UW Madison having the highest change in tuition. Both subplots show an extremely steep trend.")
         ), #close sidebar panel
         mainPanel(
-          withSpinner(plotOutput(outputId = "scatterplotFinder", click = "click_plotFinder")
+          fluidRow(valueBoxOutput("schoolBox"),valueBoxOutput("salaryPaidBox"),valueBoxOutput("employeesdBox")),
+          withSpinner(plotOutput(outputId = "Map", click = "click_plotFinder")
           ),
-          fluidRow(column(7,
-                          helpText("Tip: Click locations to populate table below with information on schools in a specific area")
-                          #actionButton(inputId = "draw", label = "Input Event and Times")
-                          
-          ),
-          column(width = 2, offset = 2, conditionalPanel(
+          fluidRow(column(7, helpText("Tip: Click locations to populate table below with information on schools in a specific area")),
+                  column(width = 2, offset = 2, conditionalPanel(
             condition = "brushFinder",
-            actionButton(inputId = "FinderClear", label = "Clear Table")))),
+            actionButton(inputId = "FinderClear", label = "Clear All"), 
+            actionButton(inputId = "FinderFill", label = "Show All")))
+          ),
           br(),
           fluidRow(
-            withSpinner(dataTableOutput(outputId = "Table")))
+            withSpinner(dataTableOutput(outputId = "Table"))), 
+          plotOutput("graduation"), plotOutput("tuition")
         ) #close main panel
       )#close sidebar layout 
-    ),
+    ), #close Tab 1
     tabPanel(
       "UW Madison -- L&S", fluid = TRUE,
       sidebarLayout(
@@ -116,22 +176,93 @@ ui <- fluidPage(
           withSpinner(plotOutput(outputId = "LSscatter"))
         ) #close main panel
       )#close sidebar layout 
-    )
-  )
+    ) #Close tab 2 
+  )#close navbar page
 )#close UI
-
 
 server <- function(input, output, session) {
   
-  relevant_info_finder <- reactive({
-    req(input$OutStateTuitionRange)
-    #req(Input$School_Rank)
-    filter(relevant_info, `Non-Resident-Tuition` >= input$OutStateTuitionRange[1], `Non-Resident-Tuition` <= input$OutStateTuitionRange[2])
+  output$graduation<- renderPlot({
+    plot2
+  }) 
+  output$tuition<- renderPlot({
+    plot1
+  }) 
+  
+  num_schools <- reactive({
+      nrow(unique(user_clickFinder$Unis))
   })
   
+  output$schoolBox <- shinydashboard::renderValueBox({
+    shinydashboard::valueBox(tags$p(num_schools(), style = "font-size: 20px;"),"Number of Selected Schools", 
+                             icon = tags$i(icon("school", lib = "font-awesome"), style="font-size: 30px; color: white"),
+                             color = "red")
+  })
   
+  salaryPaid <- reactive({
+    names <- unique(user_clickFinder$Unis)$Campus 
+    
+    amount_paid <- data_noAthletics %>% 
+      filter(`Fiscal year` == 2021 & Campus %in% names) %>% 
+      summarise(`Total Paid 2021` = sum(`Total Pay`))
+      
+    val <- amount_paid[[1]]
+    len <- floor(log10(val)) + 1
+    
+    if(len >= 10){
+      trail <- "Billion Dollars"
+      reduced <- val/1000000000
+      temp_text <- substr(paste0(reduced,""), 1,5)
+      out <- paste(temp_text,trail)
+    } #close billion if
+    else{
+      if(len >= 7){
+        trail <- "Million Dollars"
+        reduced <- val/1000000
+        temp_text <- substr(paste0(reduced,""), 1,7)
+        out <- paste(temp_text,trail)
+      } #close million if
+      else{
+        trail <- "Thousand Dollars"
+        reduced <- val/1000
+        temp_text <- substr(paste0(reduced,""), 1,7)
+        out <- paste(temp_text,trail)
+      } #close million else
+    } #close billion else
+    out
+  })
   
-  output$scatterplotFinder <- renderPlot({
+  output$salaryPaidBox <- shinydashboard::renderValueBox({
+    shinydashboard::valueBox(tags$p(salaryPaid(), style = "font-size: 20px;"),"Salary Cost", 
+                             icon = tags$i(icon("money-bill", lib = "font-awesome"), style="font-size: 30px; color: white"),
+                             color = "green")
+  })
+  
+  employeesPaid <- reactive({
+    names <- unique(user_clickFinder$Unis)$Campus 
+    
+    number_paid <- data_noAthletics %>% 
+      filter(`Fiscal year` == 2021 & Campus %in% names) %>% 
+      summarise(`Count` = n())
+    
+    val <- number_paid[[1]]
+    
+    len <- floor(log10(val)) + 1
+    trail <- "Thousand People"
+    reduced <- val/1000
+    temp_text <- substr(paste0(reduced,""), 1,5)
+    out <- paste(temp_text,trail)
+    out
+  })
+  
+  output$employeesdBox <- shinydashboard::renderValueBox({
+    shinydashboard::valueBox(tags$p(employeesPaid(), style = "font-size: 20px;"),"Number of Employees Paid", 
+                             icon = tags$i(icon("users", lib = "font-awesome"), style="font-size: 30px; color: white"),
+                             color = "blue")
+  })
+  
+  #Map
+  output$Map <- renderPlot({
     isolate({
       fiftystatesCAN %>% 
         filter(State == 'WI') %>% 
@@ -151,7 +282,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$click_plotFinder, {
-    add_row <-     nearPoints(relevant_info_finder(), input$click_plotFinder, xvar = "Longitudes", yvar = "Latitudes", threshold = 5)
+    add_row <-     nearPoints(relevant_info, input$click_plotFinder, xvar = "Longitudes", yvar = "Latitudes", threshold = 5)
     
     user_clickFinder$Unis <- rbind(add_row, user_clickFinder$Unis)  #bind new selection to  uni info df
   })
@@ -161,17 +292,23 @@ server <- function(input, output, session) {
     user_clickFinder$Unis
   })
   
-  observeEvent({
-    input$FinderClear
-    #input$EnterTimes
-  },{
-    user_clickFinder$Unis <- NULL
+  observeEvent({input$FinderClear
+    },
+               {user_clickFinder$Unis <- NULL
+  })
+  
+  observeEvent({input$FinderFill
+  },
+  {user_clickFinder$Unis <- relevant_info
   })
   
   output$Table <-  renderDataTable({
-    
-    relevant_info_finder()
+    if(!is.null(user_clickFinder$Unis)){
+      unique(user_clickFinder$Unis) %>% 
+      select(-c("Enrollment-Deposit", "Latitudes", "Longitudes"))
+    }
   },rownames = TRUE)
+  ############################################################## End Tab 1
 
   set.seed(2022)
   p <-   ggraph(G, layout = "tree", circular = TRUE) +
