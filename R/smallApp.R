@@ -11,6 +11,7 @@ library(shinydashboard)
 library(reshape2)
 source("cleaning.R")
 
+theme_set(theme_bw())
 
 #Import Data
 data <- readr::read_csv("../data/forbidden-all.csv") %>%
@@ -358,8 +359,7 @@ server <- function(input, output, session) {
         labs(
           x = "Fiscal Year",
           y = "Total Pay (USD, in thousands)"
-        ) +
-        theme_bw()
+        )
     })
 
 }
