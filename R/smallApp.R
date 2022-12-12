@@ -316,7 +316,7 @@ server <- function(input, output, session) {
     geom_edge_link(width = 0.2) +
     geom_node_label(aes(label = name, fill = type),
                     label.padding = unit(0.1, "lines")) +
-    scale_fill_brewer(palette = "Set2") +
+    scale_fill_brewer(palette = "Set3") +
     theme(legend.position = "none")
   
   plot_df <- ggplot_build(p)
