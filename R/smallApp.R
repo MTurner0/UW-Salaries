@@ -145,7 +145,7 @@ my_theme<-theme(
   axis.line = element_line(colour = "grey50"),
   legend.background = element_rect(fill = "black", size = 4, colour = "black"),
   legend.justification = c(0, 1),
-  legend.text = element_text(colour = "white"),
+  legend.text = element_text(colour = "white",size=12),
   legend.key= element_rect(fill = "black"),
   strip.background = element_rect(fill = "black", color = "grey50", size = 1),
   strip.text = element_text(colour = "white")
