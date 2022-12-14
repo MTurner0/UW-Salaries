@@ -9,6 +9,9 @@ library(stringr)
 library(shinyWidgets)
 library(shinydashboard)
 library(reshape2)
+library(tidygraph)
+library(ggraph)
+
 source("cleaning.R")
 
 theme_set(theme_bw())
@@ -125,14 +128,32 @@ nodes <- letsci %>%
 
 edges <- edge_builder(letsci, nodes)
 
-library(tidygraph)
-library(ggraph)
-
 G <- tbl_graph(
   nodes = nodes,
   edges = edges,
   directed = TRUE
 )
+
+ls_lookup <- function(labels, types) {
+  df <- tibble()
+  for (i in seq_along(labels)) {
+    df <- rbind(
+      df,
+      ls_lookup_helper(labels[i], types[i])
+    )
+  }
+  distinct(df)
+}
+
+ls_lookup_helper <- function(label, type) {
+  # For one label and type
+  column <- c("School", "Subschool", "Department")[type]
+  descriptions <- letsci %>%
+    filter(letsci[column] == label) %>%
+    pull(`Dept Description`)
+  data %>%
+    filter(`Dept Description` %in% descriptions)
+}
 
 #defining theme for tabs 3 and 4
 my_theme<-theme(
@@ -370,13 +391,13 @@ server <- function(input, output, session) {
                     label.padding = unit(0.1, "lines")) +
     scale_fill_brewer(palette = "Set3") +
     theme(legend.position = "none")
-  
+
   plot_df <- ggplot_build(p)
-  
+
   coords <- plot_df$data[[2]]
-  
+
   output$LSgraph <- renderPlot(p)
-  
+
   coords_filt <- reactive({
     if (is.null(input$brushy$xmin)){
       coords
@@ -392,11 +413,11 @@ server <- function(input, output, session) {
 
       brushed %>%
         transmute(
-          Type = levels(nodes$type)[group],
+          Type = c("School", "Subschool", "Department")[group],
           Name = label
         )
     })
-    
+
     output$LSscatter <- renderPlot({
       brushed <- coords_filt()
       
