@@ -26,28 +26,3 @@ edge_builder <- function(letsci, nodes) {
     drop_na()
 }
 
-ls_lookup <- function(labels, types) {
-  df <- tibble()
-  for (i in seq_along(labels)) {
-    df <- rbind(
-      df,
-      ls_lookup_helper(labels[i], types[i])
-    )
-  }
-  distinct(df)
-}
-
-ls_lookup_helper <- function(label, type) {
-  # For one label and type
-  column <- levels(nodes$type)[type]
-  descriptions <- letsci %>%
-    filter(letsci[column] == label) %>%
-    pull(`Dept Description`)
-  data %>%
-    filter(`Dept Description` %in% descriptions)
-}
-
-
-
-letsci["Department"]
-

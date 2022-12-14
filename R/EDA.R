@@ -11,6 +11,14 @@ data <- read_csv("../data/forbidden-all.csv") %>%
   ) %>%
   select(-Details)
 
+data %>%
+  mutate(Campus = str_remove(Campus, "UW ")) %>%
+  count(Campus) %>%
+  ggplot(aes(x = n, y = reorder(Campus, n))) +
+  geom_col() +
+  labs(x = "Employee salaries on record",
+       y = "Campus")
+
 # Makes a scatterplot of total pay by year (the athletics department is filtered
 # out)
 data %>%
@@ -59,7 +67,6 @@ data %>%
               .[1]
     )
 
-# Fun fact: Kris asked me this question when I showed him this dataset
 # Distributions of pay for various job positions across the stats department
 data %>%
   filter(str_detect(`Dept Description`, "Statistics")) %>%

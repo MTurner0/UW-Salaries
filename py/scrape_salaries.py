@@ -1,3 +1,14 @@
+"""
+Run me with:
+
+    python -m py.scrape_salaries
+
+By default:
+    - A directory called data/ with subdirectory cache/ must exist in the working directory.
+    - The resulting CSV of all salary data will be saved as data/forbidden-all.csv.
+
+"""
+
 import pandas as pd
 
 from selenium import webdriver
@@ -58,7 +69,7 @@ def main():
                 )
 
     results.to_csv(
-        "data/all-forbidden.csv",
+        "data/forbidden-all.csv",
         lineterminator='\n',
         quoting=1,
         quotechar='"',

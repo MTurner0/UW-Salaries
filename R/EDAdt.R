@@ -147,7 +147,6 @@ data %>%
               .[1]
     )
 
-# Fun fact: Kris asked me this question when I showed him this dataset
 # Distributions of pay for various job positions across the stats department
 data[
   str_detect(`Dept Description`, "Statistics")
