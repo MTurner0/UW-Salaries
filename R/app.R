@@ -102,7 +102,9 @@ data <- data %>%
   )
 #End preprocess data tab1
 
-#Begin Graph Data Preprocess
+## Begin Graph Data Preprocessing
+
+# Split department descriptions into school, subschool, and dept
 letsci <- data %>%
   filter(Campus == "UW Madison" &
            str_detect(`Dept Description`, "L&S")) %>%
@@ -114,6 +116,7 @@ letsci <- data %>%
     Department = str_split_i(`Dept Description`, "/", 3),
   )
 
+# Define nodes
 nodes <- letsci %>%
   select(-`Dept Description`) %>%
   pivot_longer(School:Department,
@@ -122,17 +125,21 @@ nodes <- letsci %>%
   drop_na() %>%
   distinct() %>%
   mutate(
-    id = 1:n(),
+    id = seq_len(n()),
     type = factor(type, levels = c("School", "Subschool", "Department"))
     )
 
+# Messy helper function sourced from cleaning.R
 edges <- edge_builder(letsci, nodes)
 
+# Construct graph
 G <- tbl_graph(
   nodes = nodes,
   edges = edges,
   directed = TRUE
 )
+
+# Define helper functions to filter L&S dataframe by brushed depts
 
 ls_lookup <- function(labels, types) {
   df <- tibble()
@@ -210,7 +217,6 @@ ui <- fluidPage(
       sidebarLayout(
         sidebarPanel(
           titlePanel("Selected departments:"),
-          #shinythemes::themeSelector(),
           fluidRow(tableOutput(outputId = "print_me") #close column
           ) #close fluid row
         ), #close sidebar panel
@@ -398,17 +404,19 @@ server <- function(input, output, session) {
 
   output$LSgraph <- renderPlot(p)
 
-  coords_filt <- reactive({
+  coords_filt <- reactive( {
     if (is.null(input$brushy$xmin)){
       coords
     } else {
-      filter(coords, x >= input$brushy$xmin, 
-             x <= input$brushy$xmax, 
-             y >= input$brushy$ymin, 
+      filter(coords, x >= input$brushy$xmin,
+             x <= input$brushy$xmax,
+             y >= input$brushy$ymin,
              y <= input$brushy$ymax)
-    }})
+        }
+      }
+    )
 
-    output$print_me <- renderTable({
+    output$print_me <- renderTable( {
       brushed <- coords_filt()
 
       brushed %>%
@@ -416,11 +424,12 @@ server <- function(input, output, session) {
           Type = c("School", "Subschool", "Department")[group],
           Name = label
         )
-    })
+      }
+    )
 
-    output$LSscatter <- renderPlot({
+    output$LSscatter <- renderPlot( {
       brushed <- coords_filt()
-      
+
       ls_lookup(brushed$label, brushed$group) %>%
         ggplot() +
         geom_jitter(
@@ -432,8 +441,13 @@ server <- function(input, output, session) {
         labs(
           x = "Fiscal Year",
           y = "Total Pay (USD, in thousands)"
-        )
-    })
+        ) +
+        ylim(0, 650) # For comparability, fix the y-axis
+      }
+    )
+
+    ############################################################## End Tab 2
+
   output$school <- renderUI({
   selectInput("school", "Select the School:", choices = data[data$Campus==input$campus,"School"], multiple = TRUE,selected = "L&S")
   })

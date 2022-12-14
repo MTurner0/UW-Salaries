@@ -1,6 +1,6 @@
 # University of Wisconsin Salary Analysis
 
-This project was completed in partial fulfillment of the requirements for [STAT 679](https://krisrs1128.github.io/stat679_notes/).
+This project was completed in partial fulfillment of the requirements for the [STAT 679](https://krisrs1128.github.io/stat679_notes/) final project.
 It has two main components:
 
 1. A web-scraping module (written in Python, found in the `py` folder) to extract information about all University of Wisconsin employee salaries from 2017 - 2021 from the [UW Salary Database](https://madison.com/uw-salary-database/html_e37ff025-9a87-5a31-91ea-b2eb50aba4cb.html) on [madison.com](madison.com).
