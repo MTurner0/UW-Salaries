@@ -8,3 +8,4 @@ data/*.csv
 data/cache/*.csv
 R/Forbidden
 .Rproj.user
+*.pdf
